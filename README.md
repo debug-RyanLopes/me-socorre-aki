@@ -135,8 +135,8 @@ Depois de instalar, **abra o Docker Desktop** e espere ele dizer que está rodan
 ### 2. Baixe o projeto
 
 ```bash
-git clone <url-deste-repositório>
-cd projeto-suporte-ti
+git clone https://github.com/debug-RyanLopes/me-socorre-aki.git
+cd me-socorre-aki
 ```
 
 ### 3. Crie o arquivo de configuração
