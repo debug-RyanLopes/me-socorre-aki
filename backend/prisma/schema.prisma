@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  TECHNICIAN
+  ADMIN
+}
+
+enum TicketStatus {
+  OPEN
+  WAITING_START
+  WAITING_USER
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Visibility {
+  PUBLIC
+  INTERNAL
+}
+
+enum EquipmentType {
+  NOTEBOOK
+  DESKTOP
+  PRINTER
+  PERIPHERAL
+  OTHER
+}
+
+enum PriorityQuestion {
+  AFFECTED
+  BLOCKING
+  ALTERNATIVE
+}
+
+enum EventType {
+  CREATED
+  ASSIGNED
+  TRIAGED
+  PRIORITY_CHANGED
+  INFO_REQUESTED
+  USER_REPLIED
+  RESOLVED
+  CLOSED
+  RESOLUTION_REJECTED
+  REOPENED
+  CANCELLED
+  SERIAL_CORRECTED
+  EQUIPMENT_LINKED
+}
+
+model Sector {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  active    Boolean     @default(true)
+  users     User[]
+  tickets   Ticket[]
+  equipment Equipment[]
+
+  @@map("sectors")
+}
+
+model Category {
+  id      Int      @id @default(autoincrement())
+  name    String   @unique
+  active  Boolean  @default(true)
+  tickets Ticket[]
+
+  @@map("categories")
+}
+
+model User {
+  id                 Int              @id @default(autoincrement())
+  name               String
+  email              String           @unique
+  login              String           @unique
+  passwordHash       String           @map("password_hash")
+  role               Role
+  sectorId           Int              @map("sector_id")
+  isActive           Boolean          @default(true) @map("is_active")
+  mustChangePassword Boolean          @default(true) @map("must_change_password")
+  deactivatedAt      DateTime?        @map("deactivated_at")
+  deactivatedById    Int?             @map("deactivated_by")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  sector             Sector           @relation(fields: [sectorId], references: [id])
+  sessions           Session[]
+  requested          Ticket[]         @relation("Requester")
+  assigned           Ticket[]         @relation("Assignee")
+  comments           TicketComment[]
+  events             TicketEvent[]
+  uploads            Attachment[]
+  notifications      Notification[]
+  equipment          Equipment[]
+
+  @@map("users")
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique @map("token_hash")
+  userId    Int      @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Equipment {
+  id            Int           @id @default(autoincrement())
+  serial        String        @unique
+  type          EquipmentType
+  manufacturer  String
+  model         String
+  sectorId      Int           @map("sector_id")
+  responsibleId Int?          @map("responsible_id")
+  acquiredAt    DateTime?     @map("acquired_at")
+  assetTag      String?       @unique @map("asset_tag")
+  notes         String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  sector        Sector        @relation(fields: [sectorId], references: [id])
+  responsible   User?         @relation(fields: [responsibleId], references: [id])
+  tickets       Ticket[]
+
+  @@map("equipment")
+}
+
+model Ticket {
+  id                Int             @id @default(autoincrement())
+  requesterId       Int             @map("requester_id")
+  requesterName     String          @map("requester_name")
+  requesterEmail    String          @map("requester_email")
+  sectorId          Int             @map("sector_id")
+  title             String?
+  description       String
+  categoryId        Int?            @map("category_id")
+  serialInformed    String          @map("serial_informed")
+  equipmentId       Int?            @map("equipment_id")
+  assigneeId        Int?            @map("assignee_id")
+  assignedAt        DateTime?       @map("assigned_at")
+  impactAffected    String          @map("impact_affected")
+  impactBlocking    String          @map("impact_blocking")
+  impactAlternative String          @map("impact_alternative")
+  suggestedPriority Priority        @map("suggested_priority")
+  priority          Priority
+  status            TicketStatus    @default(OPEN)
+  solution          String?
+  resolvedAt        DateTime?       @map("resolved_at")
+  closedAt          DateTime?       @map("closed_at")
+  cancelledAt       DateTime?       @map("cancelled_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  requester         User            @relation("Requester", fields: [requesterId], references: [id])
+  assignee          User?           @relation("Assignee", fields: [assigneeId], references: [id])
+  sector            Sector          @relation(fields: [sectorId], references: [id])
+  category          Category?       @relation(fields: [categoryId], references: [id])
+  equipment         Equipment?      @relation(fields: [equipmentId], references: [id])
+  comments          TicketComment[]
+  events            TicketEvent[]
+  attachments       Attachment[]
+  notifications     Notification[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([assigneeId])
+  @@index([requesterId])
+  @@index([sectorId])
+  @@index([equipmentId])
+  @@index([serialInformed])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+model TicketEvent {
+  id               Int       @id @default(autoincrement())
+  ticketId         Int       @map("ticket_id")
+  type             EventType
+  actorId          Int?      @map("actor_id")
+  payload          Json      @default("{}")
+  requesterVisible Boolean   @default(false) @map("requester_visible")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  ticket           Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor            User?     @relation(fields: [actorId], references: [id])
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_events")
+}
+
+model TicketComment {
+  id          Int          @id @default(autoincrement())
+  ticketId    Int          @map("ticket_id")
+  authorId    Int          @map("author_id")
+  body        String
+  visibility  Visibility   @default(PUBLIC)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User         @relation(fields: [authorId], references: [id])
+  attachments Attachment[]
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_comments")
+}
+
+model Attachment {
+  id           Int            @id @default(autoincrement())
+  ticketId     Int            @map("ticket_id")
+  commentId    Int?           @map("comment_id")
+  uploaderId   Int            @map("uploader_id")
+  originalName String         @map("original_name")
+  storageKey   String         @unique @map("storage_key")
+  mime         String
+  size         Int
+  visibility   Visibility     @default(PUBLIC)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  ticket       Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment      TicketComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  uploader     User           @relation(fields: [uploaderId], references: [id])
+
+  @@index([ticketId])
+  @@map("attachments")
+}
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  ticketId  Int       @map("ticket_id")
+  type      String
+  message   String
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket    Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model PriorityWeight {
+  id       Int              @id @default(autoincrement())
+  question PriorityQuestion
+  option   String
+  points   Int
+
+  @@unique([question, option])
+  @@map("priority_weights")
+}
+
+model PriorityThreshold {
+  priority Priority @id
+  minScore Int      @map("min_score")
+
+  @@map("priority_thresholds")
+}

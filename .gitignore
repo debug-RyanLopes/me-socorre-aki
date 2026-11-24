@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+uploads/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vite/
+*.tsbuildinfo
+.claude/*
+!.claude/sdd/
+.claude/sdd/*
+!.claude/sdd/archive/
