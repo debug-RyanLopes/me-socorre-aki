@@ -13,3 +13,4 @@ uploads/
 !.claude/sdd/
 .claude/sdd/*
 !.claude/sdd/archive/
+backups/

@@ -194,6 +194,21 @@ docker compose down        # desliga e mantém os dados
 docker compose down -v     # desliga e APAGA os dados (o próximo "up" recria a demo)
 ```
 
+### Atalhos com `make` (opcional)
+
+Se você tem o `make` (já vem no Linux e no Mac; no Windows, use o Git Bash ou WSL), os comandos mais usados ficam curtos:
+
+| Comando | O que faz |
+|---------|-----------|
+| `make` | Lista todos os atalhos |
+| `make up` | Cria o `.env` (se faltar) e sobe tudo em segundo plano |
+| `make logs` | Mostra os logs ao vivo |
+| `make down` | Desliga e mantém os dados |
+| `make clean` | Desliga e **apaga** os dados |
+| `make test` | Roda todos os testes |
+| `make check` | Tipos + testes, igual à CI |
+| `make backup` | Exporta o banco para a pasta `backups/` |
+
 ---
 
 ## 🧭 Primeiro passeio pelo sistema
