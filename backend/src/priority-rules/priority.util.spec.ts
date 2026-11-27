@@ -1,4 +1,4 @@
-import { DEFAULT_THRESHOLDS, DEFAULT_WEIGHTS, scoreAnswers, suggestPriority } from './priority.util';
+import { DEFAULT_THRESHOLDS, DEFAULT_WEIGHTS, MAX_SCORE, scoreAnswers, suggestPriority } from './priority.util';
 
 function suggest(affected: string, blocking: string, alternative: string) {
   const score = scoreAnswers(DEFAULT_WEIGHTS, { affected, blocking, alternative });
@@ -7,23 +7,23 @@ function suggest(affected: string, blocking: string, alternative: string) {
 
 describe('priority.util', () => {
   it('sem impacto relevante resulta em Baixa', () => {
-    expect(suggest('SELF', 'NONE', 'YES')).toEqual({ score: 0, priority: 'LOW' });
+    expect(suggest('SELF', 'NONE', 'YES')).toEqual({ score: 2, priority: 'LOW' });
   });
 
-  it('trabalho com limitações e alternativa resulta em Média', () => {
-    expect(suggest('SELF', 'LIMITED', 'YES').priority).toBe('MEDIUM');
+  it('algumas pessoas com limitações resulta em Média', () => {
+    expect(suggest('FEW', 'LIMITED', 'UNKNOWN')).toEqual({ score: 6, priority: 'MEDIUM' });
   });
 
-  it('uma pessoa impossibilitada sem alternativa resulta em Alta', () => {
-    expect(suggest('SELF', 'BLOCKED', 'NO')).toEqual({ score: 3, priority: 'HIGH' });
+  it('setor inteiro afetado, mas trabalhando, resulta em Alta', () => {
+    expect(suggest('SECTOR', 'NONE', 'YES')).toEqual({ score: 8, priority: 'HIGH' });
   });
 
-  it('setor inteiro impossibilitado sem alternativa resulta em Crítica', () => {
-    expect(suggest('SECTOR', 'BLOCKED', 'NO')).toEqual({ score: 5, priority: 'CRITICAL' });
+  it('uma pessoa impossibilitada sem alternativa resulta em Crítica', () => {
+    expect(suggest('SELF', 'BLOCKED', 'NO')).toEqual({ score: 9, priority: 'CRITICAL' });
   });
 
-  it('empresa inteira impossibilitada sem alternativa resulta em Crítica', () => {
-    expect(suggest('COMPANY', 'BLOCKED', 'NO').priority).toBe('CRITICAL');
+  it('a pontuação nunca passa do máximo de 10', () => {
+    expect(suggest('COMPANY', 'BLOCKED', 'NO')).toEqual({ score: MAX_SCORE, priority: 'CRITICAL' });
   });
 
   it('respeita limiares editados', () => {

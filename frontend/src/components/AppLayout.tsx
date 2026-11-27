@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { ROLE_LABEL } from '../lib/labels';
 import type { Role } from '../lib/types';
 import { NotificationBell } from './NotificationBell';
+import { ThemeToggle } from './ThemeToggle';
 
 interface NavItem {
   to: string;
@@ -51,6 +52,7 @@ export function AppLayout() {
         </nav>
         <div className="header-user">
           <NotificationBell />
+          <ThemeToggle />
           <div className="user-info">
             <strong>{user.name}</strong>
             <span>{ROLE_LABEL[user.role]}</span>

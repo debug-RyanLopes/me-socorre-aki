@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable 
 import { EventType, Prisma, Priority, Ticket, User } from '@prisma/client';
 import { TicketAccessPolicy } from '../access/ticket-access.policy';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { ticketFilterWhere } from '../common/ticket-filters';
 import { Page, toSkipTake } from '../common/dto/pagination.dto';
 import { formatTicketCode } from '../common/format-ticket-code';
 import { normalizeSerial } from '../common/normalize-serial';
@@ -127,13 +128,8 @@ export class TicketsService {
   }
 
   async list(user: AuthUser, query: ListTicketsQuery): Promise<Page<ReturnType<typeof toTicketListItem>>> {
-    const where: Prisma.TicketWhereInput = {};
+    const where: Prisma.TicketWhereInput = ticketFilterWhere(query);
     if (user.role === 'EMPLOYEE') where.requesterId = user.id;
-    if (query.status) where.status = query.status;
-    if (query.priority) where.priority = query.priority;
-    if (query.sectorId) where.sectorId = query.sectorId;
-    if (query.assigneeId) where.assigneeId = query.assigneeId;
-    if (query.unassigned) where.assigneeId = null;
     if (query.mine) where.assigneeId = user.id;
     if (query.from || query.to) where.createdAt = { gte: query.from, lte: query.to };
     if (query.q) {

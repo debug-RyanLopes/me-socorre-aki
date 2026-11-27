@@ -6,6 +6,10 @@ export interface TicketFilters {
   status?: string;
   priority?: string;
   sectorId?: number | string;
+  categoryId?: number | string;
+  uncategorized?: boolean;
+  assigneeId?: number | string;
+  equipmentId?: number | string;
   unassigned?: boolean;
   mine?: boolean;
   from?: string;

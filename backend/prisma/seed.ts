@@ -4,10 +4,10 @@ import * as argon2 from 'argon2';
 import {
   DEFAULT_THRESHOLDS,
   DEFAULT_WEIGHTS,
-  IMPACT_OPTIONS,
   scoreAnswers,
   suggestPriority,
 } from '../src/priority-rules/priority.util';
+import { CANCEL_REASONS, PROBLEMS, PUBLIC_GREETINGS } from './seed-problems';
 import { SECTORS, seedReferenceData } from './seed-reference';
 
 const TICKET_COUNT = 500;
@@ -34,21 +34,6 @@ const EMPLOYEES = [
   ['Renato Siqueira', 'renato'],
 ];
 
-const PROBLEMS = [
-  'Sem acesso ao sistema financeiro',
-  'Impressora não imprime',
-  'Notebook reinicia sozinho',
-  'Mouse sem resposta',
-  'Lentidão na rede do setor',
-  'Instalar leitor de PDF',
-  'Teclado com teclas falhando',
-  'Monitor sem imagem',
-  'Esqueci a senha do e-mail',
-  'Wi-Fi caindo na sala de reunião',
-  'Planilha de custos não abre',
-  'Bateria do notebook não carrega',
-];
-
 const MODELS: Record<EquipmentType, { manufacturer: string; model: string; prefix: string }[]> = {
   NOTEBOOK: [
     { manufacturer: 'Dell', model: 'Latitude 5420', prefix: 'NB' },
@@ -65,6 +50,15 @@ const MODELS: Record<EquipmentType, { manufacturer: string; model: string; prefi
 
 function pick<T>(items: T[]): T {
   return items[faker.number.int({ min: 0, max: items.length - 1 })];
+}
+
+function pickWeighted(options: [string, number][]): string {
+  let roll = faker.number.int({ min: 1, max: options.reduce((sum, [, weight]) => sum + weight, 0) });
+  for (const [value, weight] of options) {
+    roll -= weight;
+    if (roll <= 0) return value;
+  }
+  return options[options.length - 1][0];
 }
 
 function pickState(): TicketStatus {
@@ -145,7 +139,14 @@ export async function seedDemo(prisma: PrismaClient, password: string): Promise<
 
   const now = Date.now();
   const ticketData: Prisma.TicketCreateManyInput[] = [];
-  const plans: { status: TicketStatus; createdAt: Date; assigneeId: number | null; times: Record<string, Date> }[] = [];
+  const plans: {
+    status: TicketStatus;
+    createdAt: Date;
+    assigneeId: number | null;
+    times: Record<string, Date>;
+    problem: (typeof PROBLEMS)[number];
+  }[] = [];
+  const categoryByName = new Map(categories.map((c) => [c.name, c.id]));
 
   for (let i = 0; i < TICKET_COUNT; i += 1) {
     const requester = pick(employeeRows);
@@ -159,10 +160,19 @@ export async function seedDemo(prisma: PrismaClient, password: string): Promise<
 
     const assigneeId =
       status === 'OPEN' ? (faker.number.int({ min: 1, max: 100 }) <= 85 ? null : pick(technicians).id) : pick(technicians).id;
+    const problem = pick(PROBLEMS);
     const answers = {
-      affected: pick(IMPACT_OPTIONS.AFFECTED),
-      blocking: pick(IMPACT_OPTIONS.BLOCKING),
-      alternative: pick(IMPACT_OPTIONS.ALTERNATIVE),
+      affected: pick(problem.affected),
+      blocking: pickWeighted([
+        ['NONE', 35],
+        ['LIMITED', 45],
+        ['BLOCKED', 20],
+      ]),
+      alternative: pickWeighted([
+        ['YES', 40],
+        ['UNKNOWN', 30],
+        ['NO', 30],
+      ]),
     };
     const suggested = suggestPriority(scoreAnswers(DEFAULT_WEIGHTS, answers), DEFAULT_THRESHOLDS);
     const equipment = faker.number.int({ min: 1, max: 100 }) <= 85 ? pick(equipmentRows) : null;
@@ -173,9 +183,9 @@ export async function seedDemo(prisma: PrismaClient, password: string): Promise<
       requesterName: requester.name,
       requesterEmail: requester.email,
       sectorId: requester.sectorId,
-      title: pick(PROBLEMS),
-      description: `${faker.lorem.sentence()} ${faker.lorem.sentence()}`,
-      categoryId: faker.number.int({ min: 1, max: 100 }) <= 90 ? pick(categories).id : null,
+      title: problem.title,
+      description: pick(problem.descriptions),
+      categoryId: faker.number.int({ min: 1, max: 100 }) <= 90 ? (categoryByName.get(problem.category) ?? null) : null,
       serialInformed: equipment ? equipment.serial : `NB-9${faker.number.int({ min: 1000, max: 9999 })}`,
       equipmentId: equipment?.id ?? null,
       assigneeId,
@@ -186,7 +196,7 @@ export async function seedDemo(prisma: PrismaClient, password: string): Promise<
       suggestedPriority: suggested,
       priority: suggested,
       status,
-      solution: resolved ? 'Problema analisado e corrigido pela equipe de TI.' : null,
+      solution: resolved ? problem.solution : null,
       resolvedAt: resolved ? capped(resolvedAt) : null,
       closedAt: status === 'CLOSED' ? capped(closedAt) : null,
       cancelledAt: status === 'CANCELLED' ? capped(cancelledAt) : null,
@@ -196,6 +206,7 @@ export async function seedDemo(prisma: PrismaClient, password: string): Promise<
       status,
       createdAt,
       assigneeId,
+      problem,
       times: {
         assignedAt: capped(assignedAt),
         resolvedAt: capped(resolvedAt),
@@ -227,18 +238,29 @@ export async function seedDemo(prisma: PrismaClient, password: string): Promise<
     if (plan.status !== 'OPEN' && plan.status !== 'CANCELLED' && plan.assigneeId) {
       addEvent(ticket.id, 'TRIAGED', plan.assigneeId, plan.times.assignedAt, true, { from: 'OPEN', to: 'WAITING_START' });
     }
+    if (plan.status === 'WAITING_USER' && plan.assigneeId) {
+      const askedAt = new Date(plan.times.assignedAt.getTime() + HOUR);
+      addEvent(ticket.id, 'INFO_REQUESTED', plan.assigneeId, askedAt, true, { reason: plan.problem.question });
+      comments.push({
+        ticketId: ticket.id,
+        authorId: plan.assigneeId,
+        body: plan.problem.question,
+        visibility: 'PUBLIC',
+        createdAt: askedAt,
+      });
+    }
     if ((plan.status === 'RESOLVED' || plan.status === 'CLOSED') && plan.assigneeId) {
-      addEvent(ticket.id, 'RESOLVED', plan.assigneeId, plan.times.resolvedAt, true, { reason: 'Problema corrigido.' });
+      addEvent(ticket.id, 'RESOLVED', plan.assigneeId, plan.times.resolvedAt, true, { reason: plan.problem.solution });
     }
     if (plan.status === 'CLOSED') addEvent(ticket.id, 'CLOSED', ticket.requesterId, plan.times.closedAt, true);
     if (plan.status === 'CANCELLED') {
-      addEvent(ticket.id, 'CANCELLED', ticket.requesterId, plan.times.cancelledAt, true, { reason: 'Não é mais necessário.' });
+      addEvent(ticket.id, 'CANCELLED', ticket.requesterId, plan.times.cancelledAt, true, { reason: pick(CANCEL_REASONS) });
     }
     if (plan.assigneeId && faker.number.int({ min: 1, max: 100 }) <= 35) {
       comments.push({
         ticketId: ticket.id,
         authorId: plan.assigneeId,
-        body: 'Olá! Estou verificando o seu chamado e retorno em breve.',
+        body: pick(PUBLIC_GREETINGS),
         visibility: 'PUBLIC',
         createdAt: plan.times.assignedAt,
       });
@@ -247,7 +269,7 @@ export async function seedDemo(prisma: PrismaClient, password: string): Promise<
       comments.push({
         ticketId: ticket.id,
         authorId: plan.assigneeId,
-        body: 'Nota interna: verificar histórico do equipamento antes de trocar peças.',
+        body: plan.problem.internalNote,
         visibility: 'INTERNAL',
         createdAt: plan.times.assignedAt,
       });

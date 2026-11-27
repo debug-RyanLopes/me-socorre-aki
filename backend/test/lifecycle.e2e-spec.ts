@@ -51,8 +51,8 @@ describe('Ciclo de vida do chamado (e2e)', () => {
     });
 
     const stored = await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: res.body.id } });
-    expect(stored.suggestedPriority).toBe('HIGH');
-    expect(stored.priority).toBe('HIGH');
+    expect(stored.suggestedPriority).toBe('CRITICAL');
+    expect(stored.priority).toBe('CRITICAL');
 
     const events = await ctx.prisma.ticketEvent.findMany({ where: { ticketId: res.body.id } });
     expect(events.map((e) => e.type)).toEqual(['CREATED']);
@@ -244,11 +244,11 @@ describe('Ciclo de vida do chamado (e2e)', () => {
     const paula = await loginAs(ctx.app, 'paula');
     const marcos = await loginAs(ctx.app, 'marcos');
     const id = (await openTicket(paula)).body.id;
-    expect((await marcos.post(`/api/tickets/${id}/triage`).send({ priority: 'LOW' })).status).toBe(400);
-    const res = await marcos.post(`/api/tickets/${id}/triage`).send({ priority: 'LOW', justification: 'Sem urgência' });
+    expect((await marcos.post(`/api/tickets/${id}/triage`).send({ priority: 'HIGH' })).status).toBe(400);
+    const res = await marcos.post(`/api/tickets/${id}/triage`).send({ priority: 'HIGH', justification: 'Diretoria aguardando' });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('WAITING_START');
-    expect(res.body.priority).toBe('LOW');
+    expect(res.body.priority).toBe('HIGH');
   });
 
   it('pedir informação coloca o chamado em Aguardando usuário e a resposta do funcionário o devolve', async () => {

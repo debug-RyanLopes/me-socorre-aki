@@ -101,8 +101,9 @@ describe('Notificações, regras de prioridade e relatórios (e2e)', () => {
       expect(rules.weights).toHaveLength(10);
       expect(rules.thresholds).toHaveLength(4);
 
+      expect(rules.maxScore).toBe(10);
       const base = await openTicket(paula, { impactAffected: 'SELF', impactBlocking: 'LIMITED', impactAlternative: 'YES' });
-      expect((await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: base.body.id } })).priority).toBe('MEDIUM');
+      expect((await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: base.body.id } })).priority).toBe('LOW');
 
       const weights = rules.weights.map((w: { question: string; option: string; points: number }) =>
         w.question === 'BLOCKING' && w.option === 'LIMITED' ? { ...w, points: 3 } : w,
@@ -111,8 +112,8 @@ describe('Notificações, regras de prioridade e relatórios (e2e)', () => {
       expect(updated.status).toBe(200);
 
       const after = await openTicket(paula, { impactAffected: 'SELF', impactBlocking: 'LIMITED', impactAlternative: 'YES' });
-      expect((await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: after.body.id } })).priority).toBe('HIGH');
-      expect((await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: base.body.id } })).priority).toBe('MEDIUM');
+      expect((await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: after.body.id } })).priority).toBe('MEDIUM');
+      expect((await ctx.prisma.ticket.findUniqueOrThrow({ where: { id: base.body.id } })).priority).toBe('LOW');
     });
 
     it('rejeita regras de prioridade incoerentes', async () => {
@@ -123,6 +124,14 @@ describe('Notificações, regras de prioridade e relatórios (e2e)', () => {
       );
       expect((await helena.put('/api/priority-rules').send({ weights: rules.weights, thresholds: bad })).status).toBe(400);
       expect((await helena.put('/api/priority-rules').send({ weights: rules.weights.slice(1), thresholds: rules.thresholds })).status).toBe(400);
+
+      const tooHigh = rules.thresholds.map((t: { priority: string; minScore: number }) =>
+        t.priority === 'CRITICAL' ? { ...t, minScore: 112 } : t,
+      );
+      const rejected = await helena.put('/api/priority-rules').send({ weights: rules.weights, thresholds: tooHigh });
+      expect(rejected.status).toBe(400);
+      const heavy = rules.weights.map((w: { points: number }, i: number) => (i === 0 ? { ...w, points: 11 } : w));
+      expect((await helena.put('/api/priority-rules').send({ weights: heavy, thresholds: rules.thresholds })).status).toBe(400);
     });
 
     it('relatório resume o período e exige perfil administrador', async () => {
@@ -145,6 +154,48 @@ describe('Notificações, regras de prioridade e relatórios (e2e)', () => {
       expect((await helena.get('/api/reports/summary?period=ontem')).status).toBe(400);
       expect((await marcos.get('/api/reports/summary')).status).toBe(403);
       expect((await paula.get('/api/reports/summary')).status).toBe(403);
+    });
+
+    it('relatório aceita filtros combinados e a lista de chamados mostra os mesmos itens', async () => {
+      const paula = await loginAs(ctx.app, 'paula');
+      const carlos = await loginAs(ctx.app, 'carlos');
+      const helena = await loginAs(ctx.app, 'helena');
+      const category = await ctx.prisma.category.findFirstOrThrow();
+      const withCategory = (await openTicket(paula)).body.id;
+      const withoutCategory = (await openTicket(paula)).body.id;
+      const otherSector = (await openTicket(carlos)).body.id;
+      await ctx.prisma.ticket.update({ where: { id: withCategory }, data: { categoryId: category.id } });
+      await ctx.prisma.ticket.updateMany({ where: { id: { in: [withoutCategory, otherSector] } }, data: { categoryId: null } });
+
+      const all = (await helena.get('/api/reports/summary?period=today')).body;
+      expect(all.totals.total).toBe(3);
+      expect(all.trend.reduce((sum: number, p: { count: number }) => sum + p.count, 0)).toBe(3);
+      expect(all.byPriority.reduce((sum: number, r: { count: number }) => sum + r.count, 0)).toBe(3);
+
+      const financeiro = all.bySector.find((r: { name: string }) => r.name === 'Financeiro');
+      const bySector = (await helena.get(`/api/reports/summary?period=today&sectorId=${financeiro.key}`)).body;
+      expect(bySector.totals.total).toBe(2);
+      expect(bySector.bySector).toHaveLength(2);
+      expect(bySector.byCategory.reduce((sum: number, r: { count: number }) => sum + r.count, 0)).toBe(2);
+
+      const closedOnly = (await helena.get('/api/reports/summary?period=today&status=CLOSED')).body;
+      expect(closedOnly.totals.total).toBe(0);
+      expect(closedOnly.byStatus.reduce((sum: number, r: { count: number }) => sum + r.count, 0)).toBe(3);
+
+      const combined = (
+        await helena.get(`/api/reports/summary?period=today&sectorId=${financeiro.key}&uncategorized=true`)
+      ).body;
+      expect(combined.totals.total).toBe(1);
+      expect(combined.trend.reduce((sum: number, p: { count: number }) => sum + p.count, 0)).toBe(1);
+
+      const from = encodeURIComponent(all.from);
+      const listed = await helena.get(`/api/tickets?from=${from}&categoryId=${category.id}`);
+      expect(listed.body.items.map((t: { id: number }) => t.id)).toEqual([withCategory]);
+      const listedNone = await helena.get(`/api/tickets?from=${from}&sectorId=${financeiro.key}&uncategorized=true`);
+      expect(listedNone.body.items.map((t: { id: number }) => t.id)).toEqual([withoutCategory]);
+
+      expect((await helena.get('/api/reports/summary?period=90d')).body.trend.length).toBeGreaterThanOrEqual(90);
+      expect((await helena.get('/api/reports/summary?status=QUALQUER')).status).toBe(400);
     });
 
     it('relatório do período "hoje" ignora chamados antigos', async () => {

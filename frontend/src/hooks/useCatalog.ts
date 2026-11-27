@@ -34,7 +34,8 @@ export function usePriorityRules() {
 export function useSavePriorityRules() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (rules: PriorityRules) => api.put<PriorityRules>('/priority-rules', rules),
+    mutationFn: ({ weights, thresholds }: PriorityRules) =>
+      api.put<PriorityRules>('/priority-rules', { weights, thresholds }),
     onSuccess: (data) => queryClient.setQueryData(['priority-rules'], data),
   });
 }

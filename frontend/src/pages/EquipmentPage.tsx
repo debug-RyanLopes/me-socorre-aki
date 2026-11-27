@@ -153,7 +153,7 @@ export function EquipmentPage() {
               {(pending.data ?? []).map((item) => (
                 <li
                   key={item.serial}
-                  style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface)', borderRadius: 8, padding: '10px 12px', fontSize: 13 }}
                 >
                   <span>
                     <span className="mono" style={{ fontWeight: 600 }}>{item.serial}</span>

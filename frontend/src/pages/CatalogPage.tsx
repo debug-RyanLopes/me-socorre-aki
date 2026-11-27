@@ -44,7 +44,7 @@ function CatalogSection({ kind, title, singular }: { kind: CatalogKind; title: s
       ) : null}
       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {(items.data ?? []).map((item) => (
-          <li key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderBottom: '1px solid #eef0f3', paddingBottom: 8 }}>
+          <li key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--row-border)', paddingBottom: 8 }}>
             <span>
               {item.name} <span className={item.active ? 'chip chip-active' : 'chip chip-inactive'}>{item.active ? 'Ativo' : 'Inativo'}</span>
             </span>

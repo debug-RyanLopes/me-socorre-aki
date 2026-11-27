@@ -10,6 +10,6 @@ export class ReportsController {
 
   @Get('summary')
   summary(@Query() query: ReportPeriodQuery) {
-    return this.reports.summary(query.period);
+    return this.reports.summary(query);
   }
 }

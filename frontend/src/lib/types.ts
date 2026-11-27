@@ -141,12 +141,20 @@ export interface CountRow {
   count: number;
 }
 
+export interface TrendPoint {
+  bucket: string;
+  count: number;
+}
+
 export interface ReportSummary {
   period: string;
   from: string;
   to: string;
+  granularity: 'hour' | 'day';
   totals: { total: number; resolvedOrClosed: number; unassignedNow: number; avgResolutionSeconds: number | null };
+  trend: TrendPoint[];
   byStatus: CountRow[];
+  byPriority: CountRow[];
   bySector: CountRow[];
   byCategory: CountRow[];
   byTechnician: CountRow[];
@@ -156,4 +164,5 @@ export interface ReportSummary {
 export interface PriorityRules {
   weights: { question: 'AFFECTED' | 'BLOCKING' | 'ALTERNATIVE'; option: string; points: number }[];
   thresholds: { priority: Priority; minScore: number }[];
+  maxScore: number;
 }

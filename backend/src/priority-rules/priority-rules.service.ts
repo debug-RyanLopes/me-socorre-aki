@@ -5,11 +5,18 @@ import { UpdatePriorityRulesDto } from './dto/priority-rules.dto';
 import {
   IMPACT_OPTIONS,
   ImpactAnswers,
+  MAX_SCORE,
   Threshold,
   Weight,
   scoreAnswers,
   suggestPriority,
 } from './priority.util';
+
+export interface PriorityRules {
+  weights: Weight[];
+  thresholds: Threshold[];
+  maxScore: number;
+}
 
 const PRIORITY_ORDER: Priority[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
@@ -17,7 +24,7 @@ const PRIORITY_ORDER: Priority[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 export class PriorityRulesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getRules(): Promise<{ weights: Weight[]; thresholds: Threshold[] }> {
+  async getRules(): Promise<PriorityRules> {
     const [weights, thresholds] = await Promise.all([
       this.prisma.priorityWeight.findMany({ orderBy: [{ question: 'asc' }, { id: 'asc' }] }),
       this.prisma.priorityThreshold.findMany({ orderBy: { minScore: 'asc' } }),
@@ -25,10 +32,11 @@ export class PriorityRulesService {
     return {
       weights: weights.map(({ question, option, points }) => ({ question, option, points })),
       thresholds: thresholds.map(({ priority, minScore }) => ({ priority, minScore })),
+      maxScore: MAX_SCORE,
     };
   }
 
-  async replaceRules(dto: UpdatePriorityRulesDto): Promise<{ weights: Weight[]; thresholds: Threshold[] }> {
+  async replaceRules(dto: UpdatePriorityRulesDto): Promise<PriorityRules> {
     this.validateRules(dto);
     await this.prisma.$transaction([
       this.prisma.priorityWeight.deleteMany(),
